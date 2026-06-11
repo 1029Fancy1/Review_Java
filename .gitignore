@@ -1,0 +1,31 @@
+# === 简历与文档（不上传）===
+简历.md
+总提示词.md
+plan.md
+problem.md
+
+# === 环境配置（含密钥）===
+application-dev.yml
+application.yml
+
+# === 构建产物 ===
+target/
+*.class
+*.jar
+*.war
+
+# === IDE ===
+.idea/
+.vscode/
+*.iml
+
+# === 操作系统 ===
+.DS_Store
+Thumbs.db
+
+# === Maven ===
+*.log
+
+# 示例配置（允许上传）
+!*.example
+.claude/

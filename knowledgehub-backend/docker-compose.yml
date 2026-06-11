@@ -1,0 +1,47 @@
+# ==================== KnowledgeHub AI 本地开发依赖 ====================
+# 启动命令：docker compose up -d
+# 停止命令：docker compose down
+# 数据卷：PostgreSQL 和 Redis 数据持久化到本地
+
+version: '3.8'
+
+services:
+  # ==================== PostgreSQL 16 + pgvector ====================
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: knowledgehub-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: knowledgehub
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      # 如果使用中文全文检索，可设置
+      # LANG: zh_CN.UTF-8
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================== Redis 7 ====================
+  redis:
+    image: redis:7-alpine
+    container_name: knowledgehub-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
