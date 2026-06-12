@@ -19,39 +19,6 @@ import org.springframework.stereotype.Service;
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
 
-    /**
-     * TODO: 请你手敲完成用户注册逻辑。
-     *
-     * 学习目标：
-     * 1. 理解注册流程：校验 → 查重 → 加密 → 入库
-     * 2. 理解 LambdaQueryWrapper 的用法
-     * 3. 理解 BCrypt 密码加密的必要性
-     *i
-     * 参考实现（请不要直接复制，建议手敲）：
-     */
-
-
-     /* // 2. 密码加密
-     * String encodedPassword = PasswordUtils.encode(dto.getPassword());
-     *
-     * // 3. 构造 User 对象并入库
-     * User user = new User();
-     * user.setUsername(dto.getUsername());
-     * user.setPassword(encodedPassword);
-     * user.setEmail(dto.getEmail());
-     * user.setStatus(1);  // 默认正常状态
-     * baseMapper.insert(user);
-     *
-     * // 4. 返回 UserVO
-     * return UserVO.builder()
-     *         .id(user.getId())
-     *         .username(user.getUsername())
-     *         .email(user.getEmail())
-     *         .status(user.getStatus())
-     *         .createTime(user.getCreateTime())
-     *         .build();
-     */
-
 
     @Override
     public UserVO register(RegisterDTO dto) {
