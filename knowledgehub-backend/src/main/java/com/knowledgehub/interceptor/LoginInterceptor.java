@@ -1,56 +1,59 @@
 package com.knowledgehub.interceptor;
 
 import com.knowledgehub.context.UserContext;
+import com.knowledgehub.redis.TokenService;
+import com.knowledgehub.utils.JwtUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
- * 登录鉴权拦截器
+ * 登录鉴权拦截器 — Day 9 升级版
  *
- * 学习要点（Day 6 重点理解）：
- * 1. HandlerInterceptor 三个回调：
- *    - preHandle()：Controller 方法执行前调用，返回 false 则阻断请求
- *    - postHandle()：Controller 方法执行后、视图渲染前调用
- *    - afterCompletion()：整个请求结束后调用（无论是否异常），适合资源清理
- * 2. 执行顺序：
- *    请求 → Filter → Interceptor.preHandle() → Controller → Interceptor.postHandle()
- *    → 视图渲染 → Interceptor.afterCompletion() → Filter → 响应
- * 3. ThreadLocal 的完整生命周期：
- *    preHandle() → setUserId() → Controller 使用 getUserId() → afterCompletion() → remove()
- *
- * - Interceptor vs Filter？
- *   → Filter 是 Servlet 规范，Interceptor 是 Spring 的
- *   → Filter 在 DispatcherServlet 之前，Interceptor 在之后
- *   → Filter 能拦截所有请求，Interceptor 只能拦截到 Spring Controller
- * - 为什么在 afterCompletion 中 remove？
- *   → 保证即使 Controller 抛异常，ThreadLocal 也会被清理
- *
- * Day 6：当前版本为测试框架，暂时不做真实鉴权（Day 9 接入 Redis token 校验）
+ * 对比 Day 6：
+ * - 不再从 X-User-Id 读明文（谁都能伪造）
+ * - 改为从 Authorization Header 取 JWT → 解析 → 查 Redis 验证
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class LoginInterceptor implements HandlerInterceptor {
+
+    private final TokenService tokenService;
+    private final JwtUtils jwtUtils;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response,
                              Object handler) throws Exception {
-        String token = request.getHeader("Authorization");
+        // 1. 从 Header 取 token
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            sendUnauthorized(response, "未登录");
+            return false;
+        }
+        String token = authHeader.substring(7);  // 去掉 "Bearer " 前缀
 
-        if (token == null || token.isEmpty()) {
-            response.setStatus(401);
-            response.setContentType("application/json;charset=UTF-8");
-            response.getWriter().write("{\"code\":401,\"message\":\"未登录\"}");
+        // 2. JWT 解析出 userId
+        Long userId;
+        try {
+            userId = jwtUtils.parseUserId(token);
+        } catch (Exception e) {
+            sendUnauthorized(response, "token 无效或已过期");
             return false;
         }
 
-        String userIdHeader = request.getHeader("X-User-Id");
-        if (userIdHeader != null) {
-            UserContext.setUserId(Long.valueOf(userIdHeader));
+        // 3. 查 Redis 确认 token 有效（支持主动踢下线）
+        Long cachedUserId = tokenService.getUserId(token);
+        if (cachedUserId == null || !cachedUserId.equals(userId)) {
+            sendUnauthorized(response, "token 已失效");
+            return false;
         }
 
+        // 4. 写入 ThreadLocal
+        UserContext.setUserId(userId);
         return true;
     }
 
@@ -58,5 +61,11 @@ public class LoginInterceptor implements HandlerInterceptor {
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response,
                                  Object handler, Exception ex) {
         UserContext.remove();
+    }
+
+    private void sendUnauthorized(HttpServletResponse response, String message) throws Exception {
+        response.setStatus(401);
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write("{\"code\":401,\"message\":\"" + message + "\"}");
     }
 }

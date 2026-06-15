@@ -1,11 +1,11 @@
 package com.knowledgehub.module.user.controller;
 
 import com.knowledgehub.common.Result;
-import com.knowledgehub.exception.BusinessException;
 import com.knowledgehub.module.user.dto.LoginDTO;
 import com.knowledgehub.module.user.dto.RegisterDTO;
 import com.knowledgehub.module.user.entity.User;
 import com.knowledgehub.module.user.service.UserService;
+import com.knowledgehub.module.user.vo.LoginVO;
 import com.knowledgehub.module.user.vo.UserVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -14,16 +14,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
-/**
- * 用户控制器
- *
- * 接口清单：
- * - POST /api/user/register — 注册
- * - POST /api/user/login    — 登录
- * - GET  /api/user/list     — 查询所有用户（Day 2 测试用）
- * - GET  /api/user/{id}     — 根据 ID 查用户（Day 2 测试用）
- */
 @Tag(name = "用户模块", description = "用户注册、登录、个人信息")
 @RestController
 @RequestMapping("/api/user")
@@ -32,42 +24,44 @@ public class UserController {
 
     private final UserService userService;
 
-    /**
-     * 用户注册
-     *
-     * @Valid 触发 DTO 上的校验注解（@NotBlank, @Size, @Email）
-     * 校验失败时抛出 MethodArgumentNotValidException，由 GlobalExceptionHandler 统一处理
-     */
     @Operation(summary = "用户注册")
     @PostMapping("/register")
     public Result<UserVO> register(@Valid @RequestBody RegisterDTO dto) {
-        UserVO vo = userService.register(dto);
-        return Result.ok(vo);
+        return Result.ok(userService.register(dto));
     }
 
-    /**
-     * 用户登录
-     *
-     * Day 9 将改造此接口，返回 JWT token
-     */
-    @Operation(summary = "用户登录")
+    @Operation(summary = "用户登录，返回 JWT token")
     @PostMapping("/login")
-    public Result<UserVO> login(@Valid @RequestBody LoginDTO dto) {
-        UserVO vo = userService.login(dto);
-        return Result.ok(vo);
+    public Result<LoginVO> login(@Valid @RequestBody LoginDTO dto) {
+        return Result.ok(userService.login(dto));
     }
-
-    // ==================== Day 2 测试接口，后续移除 ====================
 
     @Operation(summary = "查询所有用户（测试用）")
     @GetMapping("/list")
-    public Result<List<User>> list() {
-        return Result.ok(userService.list());
+    public Result<List<UserVO>> list() {
+        List<UserVO> voList = userService.list().stream()
+                .map(user -> UserVO.builder()
+                        .id(user.getId())
+                        .username(user.getUsername())
+                        .email(user.getEmail())
+                        .status(user.getStatus())
+                        .createTime(user.getCreateTime())
+                        .build())
+                .collect(Collectors.toList());
+        return Result.ok(voList);
     }
 
     @Operation(summary = "根据 ID 查用户（测试用）")
     @GetMapping("/{id}")
-    public Result<User> getById(@PathVariable Long id) {
-        return Result.ok(userService.getById(id));
+    public Result<UserVO> getById(@PathVariable Long id) {
+        User user = userService.getById(id);
+        UserVO vo = UserVO.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .status(user.getStatus())
+                .createTime(user.getCreateTime())
+                .build();
+        return Result.ok(vo);
     }
 }

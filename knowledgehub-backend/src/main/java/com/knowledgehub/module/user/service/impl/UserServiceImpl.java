@@ -9,23 +9,27 @@ import com.knowledgehub.module.user.dto.RegisterDTO;
 import com.knowledgehub.module.user.entity.User;
 import com.knowledgehub.module.user.mapper.UserMapper;
 import com.knowledgehub.module.user.service.UserService;
+import com.knowledgehub.module.user.vo.LoginVO;
 import com.knowledgehub.module.user.vo.UserVO;
+import com.knowledgehub.redis.TokenService;
+import com.knowledgehub.utils.JwtUtils;
 import com.knowledgehub.utils.PasswordUtils;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/**
- * 用户 Service 实现
- */
 @Service
+@RequiredArgsConstructor
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
 
+    private final JwtUtils jwtUtils;
+    private final TokenService tokenService;
 
     @Override
     public UserVO register(RegisterDTO dto) {
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(User::getUsername,dto.getUsername());
-        User exitUser = baseMapper.selectOne(wrapper);
-        if(exitUser != null){
+        wrapper.eq(User::getUsername, dto.getUsername());
+        User existUser = baseMapper.selectOne(wrapper);
+        if (existUser != null) {
             throw new BusinessException(ErrorCode.USER_EXISTS);
         }
 
@@ -38,48 +42,50 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         baseMapper.insert(user);
 
         return UserVO.builder()
-        .id(user.getId())
-        .username(user.getUsername())
-        .email(user.getEmail())
-        .status(user.getStatus())
-        .createTime(user.getCreateTime())
-        .build();
-
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .status(user.getStatus())
+                .createTime(user.getCreateTime())
+                .build();
     }
 
-    /**
-     * 学习目标：
-     * 1. 理解登录流程：查用户 → 验状态 → 验密码 → 返回
-     * 2. 理解为什么先查用户再验密码（安全：不让攻击者知道用户名是否存在）
-     *    提示：先查用户 → 不存在抛 PASSWORD_ERROR（而不是 USER_NOT_FOUND）
-     * 3. 理解 BCrypt 密码校验的原理
-     */
     @Override
-    public UserVO login(LoginDTO dto) {
-        //实现登录逻辑
+    public LoginVO login(LoginDTO dto) {
+        // 查用户
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(User::getUsername,dto.getUsername());
+        wrapper.eq(User::getUsername, dto.getUsername());
         User user = baseMapper.selectOne(wrapper);
-        if(user == null){
+        if (user == null) {
             throw new BusinessException(ErrorCode.PASSWORD_ERROR);
         }
 
-        if(user.getStatus() == 0){
+        // 验状态
+        if (user.getStatus() == 0) {
             throw new BusinessException(ErrorCode.USER_DISABLED);
         }
 
-        if(!PasswordUtils.matches(dto.getPassword(),user.getPassword())){
+        // 验密码
+        if (!PasswordUtils.matches(dto.getPassword(), user.getPassword())) {
             throw new BusinessException(ErrorCode.PASSWORD_ERROR);
         }
 
-        return UserVO.builder()
-        .id(user.getId())
-        .username(user.getUsername())
-        .email(user.getEmail())
-        .status(user.getStatus())
-        .createTime(user.getCreateTime())
-        .build();
+        // 生成 token + 存 Redis
+        String token = jwtUtils.generate(user.getId());
+        tokenService.save(token, user.getId());
 
+        // 返回 token + 用户信息
+        UserVO userVO = UserVO.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .status(user.getStatus())
+                .createTime(user.getCreateTime())
+                .build();
 
+        return LoginVO.builder()
+                .token(token)
+                .userInfo(userVO)
+                .build();
     }
 }
